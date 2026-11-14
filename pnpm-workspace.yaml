@@ -1,0 +1,3 @@
+# The package imports nothing from its peers (its types are structural), so its own install does
+# not need them.
+autoInstallPeers: false
