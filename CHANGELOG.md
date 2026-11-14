@@ -8,6 +8,8 @@ README). Sites pin a commit; the version is what a tool compares.
 - `Site` marks a 200 with no edge header `no-store`. With the cache provider configured every
   rendered route has one, so this is a site without the provider: it is now not cached at all,
   rather than leaving its never-cached and private pages to Workers Cache's own rules.
+  Static files and prerendered pages served through the Worker (only with `run_worker_first`)
+  also have no edge header, so they too are no longer kept by Workers Cache.
 
 ## 0.1.1
 

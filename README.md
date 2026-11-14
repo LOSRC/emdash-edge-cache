@@ -235,6 +235,8 @@ redirects, nightly purges of particular tags, `public/_headers` for static files
   `cache: { provider: cacheCloudflare() }`. Without it a page 200 has no edge header at all, so
   `Site` marks it `no-store`: the site is safe but caches no pages. A deploy tool should refuse a
   site without the provider, and an after-deploy check that expects a HIT will fail on one.
+  A site that sets `run_worker_first` gets the same for static files and prerendered pages served
+  through the Worker: they are not kept by Workers Cache.
 - Adopting the gateway on a site that already caches changes the cache key (the entrypoint is
   part of it), so expect a cold cache once.
 
