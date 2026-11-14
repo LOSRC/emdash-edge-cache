@@ -29,13 +29,18 @@ Sites install it from GitHub, pinned by commit:
 pnpm add github:LOSRC/emdash-edge-cache#<commit>
 ```
 
-The package builds its `dist/` in a `prepare` script. pnpm 10 and later do not run a dependency's
-build scripts unless you allow them, so allow this one in `pnpm-workspace.yaml`:
+The package builds its `dist/` in a `prepare` script when pnpm fetches it. pnpm 11 refuses to run
+a git dependency's build (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`) unless it is allowed in
+`pnpm-workspace.yaml`:
 
 ```yaml
 allowBuilds:
   '@losrc/emdash-edge-cache': true
 ```
+
+The package name is enough. A key pinned to one tarball
+(`'@losrc/emdash-edge-cache@https://codeload.github.com/LOSRC/emdash-edge-cache/tar.gz/<full sha>': true`)
+also works, but has to change with every upgrade.
 
 Peer ranges, the versions this release was written against: `emdash` 1.2.0 to 1.5.x, `astro`
 7.3.5 to 7.4.x, `@astrojs/cloudflare` 14.3.3 to 14.4.x. pnpm warns outside them. That is on
