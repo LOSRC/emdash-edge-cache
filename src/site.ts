@@ -51,16 +51,19 @@ export interface FetchHandler<Env> {
  *   that still called `setPageCache` with hints: the header exists (`public`, tags only), so the
  *   adapter's own `no-store` default does not fire, and Workers Cache may keep such a response by
  *   heuristic. A route with no rule must not be cached.
- * - A 200 with no CDN header at all is returned as it is. For a rendered route with the cache
- *   provider configured the adapter has already written `no-store`, so it does not arise; a site
- *   without the provider gets no edge header from anything here (see the README).
+ * - A 200 with no CDN header at all is marked `no-store`. With the cache provider configured the
+ *   adapter writes one on every rendered route, so this is a site without the provider (or a
+ *   static file the Worker served itself). Its never-cached and private renders would otherwise
+ *   go out with nothing to stop Workers Cache keeping them by its own rules. Failing closed costs
+ *   a misconfigured site its caching, which an after-deploy check sees at once.
  */
 export function withEdgeRules(response: Response, url: URL): Response {
   if (isImageEndpoint(url)) return withImageEdgeCache(response, url)
   if (response.status === 304) return response
   const cdn = response.headers.get(CDN_CACHE_CONTROL)
   if (response.status !== 200) return withCdnCacheControl(response, 'no-store')
-  if (cdn && !cdn.includes('no-store')) {
+  if (!cdn) return withCdnCacheControl(response, 'no-store')
+  if (!cdn.includes('no-store')) {
     if (!cdn.includes('max-age=')) return withCdnCacheControl(response, 'no-store')
     if (cdn.startsWith('public') && !cdn.includes('stale-if-error')) {
       return withCdnCacheControl(response, `${cdn}, stale-if-error=${STALE_IF_ERROR}`)

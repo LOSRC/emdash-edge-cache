@@ -232,9 +232,9 @@ redirects, nightly purges of particular tags, `public/_headers` for static files
   site that binds them should test that first.
 - **The cache provider is required.** The exclusions for page 200s (never-cached paths, private
   renders) work through `cache.set(false)` and the adapter's `no-store` default, and both need
-  `cache: { provider: cacheCloudflare() }`. A site without it sends those 200s with no edge header
-  at all, and Workers Cache then decides by its own rules (the adapter's own comment says up to
-  two hours). The non-200 guard and the image rules in `Site` do not depend on it.
+  `cache: { provider: cacheCloudflare() }`. Without it a page 200 has no edge header at all, so
+  `Site` marks it `no-store`: the site is safe but caches no pages. A deploy tool should refuse a
+  site without the provider, and an after-deploy check that expects a HIT will fail on one.
 - Adopting the gateway on a site that already caches changes the cache key (the entrypoint is
   part of it), so expect a cold cache once.
 

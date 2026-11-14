@@ -1,6 +1,6 @@
 {
   "name": "@losrc/emdash-edge-cache",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Edge caching for EmDash sites on Cloudflare Workers: an uncached gateway in front of a cached Site entrypoint, tracking-parameter stripping, image lifetimes, private renders and a non-200 guard",
   "license": "MIT",
   "type": "module",
