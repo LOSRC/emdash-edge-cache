@@ -54,9 +54,16 @@ describe('withEdgeRules', () => {
     expect(withEdgeRules(answer(200), PAGE).headers.has(CDN)).toBe(false)
   })
 
-  it('leaves a public 200 without a max-age alone', () => {
+  it('marks a public 200 without a max-age no-store, so the cache guesses no lifetime', () => {
     const response = withEdgeRules(answer(200, { [CDN]: 'public' }), PAGE)
-    expect(response.headers.get(CDN)).toBe('public')
+    expect(response.headers.get(CDN)).toBe('no-store')
+  })
+
+  it('marks a route with no rule that only set cache tags no-store', () => {
+    // What setPageCache leaves when no route rule seeded a lifetime: public plus tags, no max-age.
+    const response = withEdgeRules(answer(200, { [CDN]: 'public', 'Cache-Tag': 'a,b' }), PAGE)
+    expect(response.headers.get(CDN)).toBe('no-store')
+    expect(response.headers.get('Cache-Tag')).toBe('a,b')
   })
 
   it.each([301, 404, 500])('never keeps a %i, even one a route rule made public', (status) => {

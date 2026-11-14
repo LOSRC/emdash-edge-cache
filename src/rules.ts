@@ -8,6 +8,7 @@
  * enforced by the middleware (middleware.ts), which switches the route cache off for them.
  */
 import { DETAIL, LISTING, type RouteRule } from './lifetimes.ts'
+import { withoutTrailingSlash as bare } from './path.ts'
 
 export { DAY, DETAIL, LISTING, STALE_IF_ERROR, WEEK } from './lifetimes.ts'
 export type { RouteRule } from './lifetimes.ts'
@@ -43,7 +44,7 @@ export const ALWAYS_NEVER_CACHED_PATHS: readonly string[] = ['/robots.txt', '/si
 const SITEMAP_SHARD = /^\/sitemap-[^/]+\.xml$/
 
 function isSitemapShard(path: string): boolean {
-  return SITEMAP_SHARD.test(path)
+  return SITEMAP_SHARD.test(bare(path))
 }
 
 /** Whether a rule key is a pattern (`[param]` or `*`) rather than one literal path. */
@@ -108,7 +109,7 @@ export function defineCacheConfig(config: EdgeCacheConfig): NormalisedEdgeCacheC
     if (!pattern.startsWith('/')) throw new Error(`Route rule "${pattern}" must start with "/"`)
     // A literal shard path is the site's own tagged sitemap; only the pattern is EmDash's route.
     if (
-      ALWAYS_NEVER_CACHED_PATHS.includes(pattern) ||
+      ALWAYS_NEVER_CACHED_PATHS.includes(bare(pattern)) ||
       (isSitemapShard(pattern) && isPattern(pattern))
     ) {
       throw new Error(
@@ -116,7 +117,7 @@ export function defineCacheConfig(config: EdgeCacheConfig): NormalisedEdgeCacheC
           'and is never cached',
       )
     }
-    if (sitePaths.includes(pattern)) {
+    if (sitePaths.some((path) => bare(path) === bare(pattern))) {
       throw new Error(`Route rule "${pattern}" is also in neverCached.paths, which is never cached`)
     }
     const lead = literalLead(pattern)
@@ -140,6 +141,7 @@ export function defineCacheConfig(config: EdgeCacheConfig): NormalisedEdgeCacheC
  * Whether a path is never cached, whatever route rule matched. The fixed prefixes and paths
  * always count, even for a config that was not run through `defineCacheConfig`. A sitemap shard
  * is never cached unless the config has a rule for that exact path (the site's own tagged sitemap).
+ * Exact paths ignore a trailing slash; prefixes already cover it (`under`).
  */
 export function isNeverCached(
   pathname: string,
@@ -149,11 +151,13 @@ export function isNeverCached(
   },
 ): boolean {
   const { prefixes = [], paths = [] } = config.neverCached ?? {}
-  const ownShard = isSitemapShard(pathname) && Object.hasOwn(config.routeRules ?? {}, pathname)
+  const path = bare(pathname)
+  const ownShard =
+    isSitemapShard(path) && Object.keys(config.routeRules ?? {}).some((key) => bare(key) === path)
   return (
-    (isSitemapShard(pathname) && !ownShard) ||
-    ALWAYS_NEVER_CACHED_PATHS.includes(pathname) ||
-    paths.includes(pathname) ||
+    (isSitemapShard(path) && !ownShard) ||
+    ALWAYS_NEVER_CACHED_PATHS.includes(path) ||
+    paths.some((site) => bare(site) === path) ||
     ALWAYS_NEVER_CACHED_PREFIXES.some((prefix) => under(pathname, prefix)) ||
     prefixes.some((prefix) => under(pathname, prefix))
   )

@@ -52,21 +52,32 @@ describe('throughGateway', () => {
       expect(new URL(stub.seen[0]!.url).search).toBe('?_preview=token&a=1')
     })
 
-    it('keeps the method, headers and body of a tagged request', async () => {
+    it('keeps the method and headers of a tagged HEAD request', async () => {
       const stub = site()
       await throughGateway(
-        new Request(`${BASE}/form?utm_source=a`, {
-          method: 'POST',
-          headers: { 'X-Test': '1' },
-          body: 'payload',
-        }),
+        new Request(`${BASE}/about?utm_source=a`, { method: 'HEAD', headers: { 'X-Test': '1' } }),
         stub,
       )
       const [seen] = stub.seen
-      expect(seen!.method).toBe('POST')
+      expect(seen!.url).toBe(`${BASE}/about`)
+      expect(seen!.method).toBe('HEAD')
       expect(seen!.headers.get('X-Test')).toBe('1')
-      expect(await seen!.text()).toBe('payload')
     })
+
+    it.each(['POST', 'PUT', 'DELETE'])(
+      'leaves the tracking parameters on a %s, which is never cached',
+      async (method) => {
+        const stub = site()
+        const request = new Request(`${BASE}/form?utm_source=a&b=1`, {
+          method,
+          headers: { 'X-Test': '1' },
+          body: 'payload',
+        })
+        await throughGateway(request, stub)
+        expect(stub.seen[0]).toBe(request)
+        expect(stub.seen[0]!.url).toBe(`${BASE}/form?utm_source=a&b=1`)
+      },
+    )
 
     it('returns the site’s response', async () => {
       const response = await throughGateway(
@@ -87,13 +98,13 @@ describe('throughGateway', () => {
       expect(response.headers.get('Location')).toBe('/new/?utm_source=news')
     })
 
-    it('gets them back on an absolute same-origin Location, as path, search and hash', async () => {
+    it('gets them back on an absolute same-origin Location, which stays absolute', async () => {
       const response = await throughGateway(
         new Request(tagged),
         site(redirect(`${BASE}/new/?ref=a#top`, 302)),
       )
       expect(response.status).toBe(302)
-      expect(response.headers.get('Location')).toBe('/new/?ref=a&utm_source=news#top')
+      expect(response.headers.get('Location')).toBe(`${BASE}/new/?ref=a&utm_source=news#top`)
     })
 
     it('does not override a tag the target already carries', async () => {
@@ -110,6 +121,22 @@ describe('throughGateway', () => {
         site(redirect('../new/')),
       )
       expect(response.headers.get('Location')).toBe('/docs/new/?utm_source=news')
+    })
+
+    it('writes an absolute Location whole when its path would read as another host', async () => {
+      const response = await throughGateway(
+        new Request(tagged),
+        site(redirect(`${BASE}//evil.example/x`)),
+      )
+      expect(response.headers.get('Location')).toBe(`${BASE}//evil.example/x?utm_source=news`)
+    })
+
+    it('writes a relative Location resolving to a // path whole, not as a bare path', async () => {
+      const response = await throughGateway(
+        new Request(tagged),
+        site(redirect('/.//evil.example/x')),
+      )
+      expect(response.headers.get('Location')).toBe(`${BASE}//evil.example/x?utm_source=news`)
     })
 
     it('leaves a redirect to another origin alone', async () => {

@@ -19,6 +19,16 @@ export type SiteStub = SiteFetcher & {
   runScheduled(cron: string, scheduledTime: number): Promise<void>
 }
 
+/** Whether a `Location` carries its own origin (a scheme), rather than being relative. */
+function isAbsolute(location: string): boolean {
+  try {
+    new URL(location)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * A redirect the site answered, with the request's tracking parameters put back on its target, so
  * a tagged link that redirects keeps its tags for analytics. Targets on other sites, and
@@ -34,12 +44,22 @@ function withTrackingOnRedirect(response: Response, original: URL): Response {
   } catch {
     return response
   }
+  const wasAbsolute = isAbsolute(location)
   if (target.origin !== original.origin) return response
   const tagged = withTrackingParamsOf(target, original)
   if (tagged.search === target.search) return response
   const redirect = new Response(response.body, response)
-  redirect.headers.set('Location', tagged.pathname + tagged.search + tagged.hash)
+  // A path starting `//` or `/\` would read as another host once written without its origin.
+  const bare = /^\/[/\\]/.test(tagged.pathname)
+  redirect.headers.set(
+    'Location',
+    wasAbsolute || bare ? tagged.href : tagged.pathname + tagged.search + tagged.hash,
+  )
   return redirect
+}
+
+function isCacheable(request: Request): boolean {
+  return request.method === 'GET' || request.method === 'HEAD'
 }
 
 /**
@@ -50,7 +70,8 @@ function withTrackingOnRedirect(response: Response, original: URL): Response {
  */
 export async function throughGateway(request: Request, site: SiteFetcher): Promise<Response> {
   const url = new URL(request.url)
-  const plain = withoutTrackingParams(url)
+  // Only GET and HEAD are cached; for any other method a handler may want the parameters.
+  const plain = isCacheable(request) ? withoutTrackingParams(url) : url
   const forwarded = plain === url ? request : new Request(plain, request)
   const response = withTrackingOnRedirect(await site.fetch(forwarded), url)
   return withNoindexOnWorkersDev(withImageBrowserCache(response, url), url)

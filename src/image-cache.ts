@@ -1,3 +1,5 @@
+import { withoutTrailingSlash } from './path.ts'
+
 /**
  * How long browsers and the edge keep resized images (`/_image`). EmDash serves them with
  * `Cache-Control: max-age=0, must-revalidate`, because replacing a file in the Media Library
@@ -25,9 +27,9 @@ export const IMAGE_EDGE_CACHE = 'public, max-age=3600'
 /** Statuses whose headers a browser stores: a 304 refreshes the stored lifetime. */
 const BROWSER_STATUSES = new Set([200, 304])
 
-/** Whether the URL is the image endpoint. */
+/** Whether the URL is the image endpoint, with or without a slash (`trailingSlash: 'always'`). */
 export function isImageEndpoint(url: URL): boolean {
-  return url.pathname === IMAGE_ENDPOINT
+  return withoutTrailingSlash(url.pathname) === IMAGE_ENDPOINT
 }
 
 /**
@@ -36,7 +38,10 @@ export function isImageEndpoint(url: URL): boolean {
  */
 export function withImageBrowserCache(response: Response, url: URL): Response {
   if (!isImageEndpoint(url) || !BROWSER_STATUSES.has(response.status)) return response
-  if (!response.headers.get('Cache-Control')?.startsWith('public')) return response
+  const upstream = response.headers.get('Cache-Control')
+  if (!upstream?.startsWith('public')) return response
+  // A bundled asset served through the endpoint comes with a year and `immutable`; keep it.
+  if (upstream.includes('immutable')) return response
   const cached = new Response(response.body, response)
   cached.headers.set('Cache-Control', IMAGE_BROWSER_CACHE)
   return cached

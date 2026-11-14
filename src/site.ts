@@ -47,15 +47,22 @@ export interface FetchHandler<Env> {
  * - Any other status than 200 is marked `no-store`: nothing would purge it.
  * - A 200 the adapter made public with a `max-age` gets `stale-if-error`, which Astro's route rules
  *   cannot say. One the adapter marked `no-store` is left alone.
+ * - A 200 whose CDN header has no `max-age` is marked `no-store`. That is a route with no rule
+ *   that still called `setPageCache` with hints: the header exists (`public`, tags only), so the
+ *   adapter's own `no-store` default does not fire, and Workers Cache may keep such a response by
+ *   heuristic. A route with no rule must not be cached. A 200 with no CDN header at all is left
+ *   for that default.
  */
 export function withEdgeRules(response: Response, url: URL): Response {
   if (isImageEndpoint(url)) return withImageEdgeCache(response, url)
   if (response.status === 304) return response
   const cdn = response.headers.get(CDN_CACHE_CONTROL)
   if (response.status !== 200) return withCdnCacheControl(response, 'no-store')
-  const keptPage = cdn?.startsWith('public') && cdn.includes('max-age=')
-  if (cdn && keptPage && !cdn.includes('stale-if-error')) {
-    return withCdnCacheControl(response, `${cdn}, stale-if-error=${STALE_IF_ERROR}`)
+  if (cdn && !cdn.includes('no-store')) {
+    if (!cdn.includes('max-age=')) return withCdnCacheControl(response, 'no-store')
+    if (cdn.startsWith('public') && !cdn.includes('stale-if-error')) {
+      return withCdnCacheControl(response, `${cdn}, stale-if-error=${STALE_IF_ERROR}`)
+    }
   }
   return response
 }

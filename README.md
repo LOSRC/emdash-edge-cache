@@ -12,12 +12,12 @@ What the package does:
 
 | Concern | Behaviour | Where |
 |---|---|---|
-| Tracking parameters | Strips `utm_*`, `mc_*`, `fbclid` and `gclid` before the cache, so a tagged link shares the plain page's cache entry. Puts them back on a same-origin redirect `Location`, so analytics still sees them after the hop. | gateway |
+| Tracking parameters | Strips `utm_*`, `mc_*`, `fbclid` and `gclid` before the cache, so a tagged link shares the plain page's cache entry. Puts them back on a same-origin redirect `Location`, so analytics still sees them after the hop. Only GET and HEAD requests are stripped: they reach the site without the parameters, so server code never sees them, and analytics reads them in the browser. Other methods are not cached and pass through unchanged. | gateway |
 | Pages | Route rules a site extends. Detail pages: a day. Listings: ten minutes. Both get a week of `stale-while-revalidate`, and `Site` adds a week of `stale-if-error`. | `cache-config.ts`, `Site` |
-| Resized images (`/_image`) | Edge: a 200 for an hour, any error `no-store`. Browsers: `public, max-age=86400, stale-while-revalidate=604800`. | `Site` (edge), gateway (browser) |
+| Resized images (`/_image`) | Edge: a 200 or a 304 for an hour, any error `no-store`. Browsers: `public, max-age=86400, stale-while-revalidate=604800`, except that an upstream `immutable` lifetime is kept as it is. | `Site` (edge), gateway (browser) |
 | Only 200s are cached | Any other status is kept out of the edge cache. Redirects, 404s and errors also get `private, no-store`, because nothing would purge them. | middleware, and again in `Site` |
 | Private renders | The admin, `?_preview`, the toolbar's `?_edit` render, the `emdash-edit-mode=true` cookie and signed-in visitors all get `private, no-store`, and stay out of the edge cache. | middleware |
-| Never-cached paths | `/_emdash` and `/_image` (so no page rule can catch them), plus EmDash's untagged `/robots.txt`, `/sitemap.xml` and `/sitemap-*.xml`, plus the site's own. A site that serves its own tagged sitemap shard opts in with a rule for that exact path. | middleware |
+| Never-cached paths | `/_emdash` and `/_image` (so no page rule can catch them), plus EmDash's untagged `/robots.txt`, `/sitemap.xml` and `/sitemap-*.xml`, plus the site's own. A trailing slash makes no difference (`/cart/` is `/cart`), because Astro serves both from one page while the cache keys them apart. A site that serves its own tagged sitemap shard opts in with a rule for that exact path. | middleware |
 | `noindex` | `X-Robots-Tag: noindex, nofollow` on any `*.workers.dev` address, added after the cache so it never reaches a page cached for the real domain. | gateway |
 | Crons | The gateway's `scheduled` calls `Site.runScheduled`, because purges reach only the cache of the entrypoint that makes them. EmDash's sweep runs there and is awaited. | gateway, `Site` |
 
@@ -216,6 +216,11 @@ redirects, nightly purges of particular tags, `public/_headers` for static files
 - **Purges are rate-limited** (Free plan: 5 a minute, a burst of 25) and can fail silently.
 - **A HIT never runs the Worker**, so nothing in `Site` or the middleware sees it.
 - **The cache key ignores the hostname.** Two environments must never share a Worker.
+- **Tracking parameters never reach server code** on GET and HEAD requests: the gateway strips
+  them before `Site` runs. Analytics reads them in the browser.
+- **EmDash's co-editing rooms are untested through the gateway.** Its WebSocket upgrades and
+  `EMDASH_ROOMS` binding have not been tried with the gateway and the cached `Site` in front. A
+  site that binds them should test that first.
 - Adopting the gateway on a site that already caches changes the cache key (the entrypoint is
   part of it), so expect a cold cache once.
 

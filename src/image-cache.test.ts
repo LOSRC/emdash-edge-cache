@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   IMAGE_BROWSER_CACHE,
   IMAGE_EDGE_CACHE,
+  isImageEndpoint,
   withImageBrowserCache,
   withImageEdgeCache,
 } from './image-cache.ts'
@@ -13,6 +14,27 @@ const EMDASH_IMAGE_HEADERS = { 'Cache-Control': 'public, max-age=0, must-revalid
 
 const answer = (status: number, headers: HeadersInit = EMDASH_IMAGE_HEADERS) =>
   new Response(status === 304 ? null : 'body', { status, headers })
+
+describe('isImageEndpoint', () => {
+  it('accepts the endpoint with or without a trailing slash', () => {
+    expect(isImageEndpoint(new URL('https://example.com/_image'))).toBe(true)
+    expect(isImageEndpoint(new URL('https://example.com/_image/?w=640'))).toBe(true)
+  })
+
+  it('rejects other paths, including sub-paths and near misses', () => {
+    expect(isImageEndpoint(new URL('https://example.com/_image/x'))).toBe(false)
+    expect(isImageEndpoint(new URL('https://example.com/_images'))).toBe(false)
+  })
+
+  it('gives the image rules to /_image/ (trailingSlash: always)', () => {
+    const slashed = new URL('https://example.com/_image/?w=640')
+    expect(withImageBrowserCache(answer(200), slashed).headers.get('Cache-Control')).toBe(
+      IMAGE_BROWSER_CACHE,
+    )
+    const edge = withImageEdgeCache(answer(200), slashed)
+    expect(edge.headers.get('Cloudflare-CDN-Cache-Control')).toBe(IMAGE_EDGE_CACHE)
+  })
+})
 
 describe('withImageBrowserCache', () => {
   it('gives browsers a day and a week of stale-while-revalidate for a 200', () => {
@@ -38,6 +60,12 @@ describe('withImageBrowserCache', () => {
       IMAGE,
     )
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
+  })
+
+  it('keeps an upstream immutable lifetime (a bundled asset served through the endpoint)', () => {
+    const immutable = 'public, max-age=31536000, immutable'
+    const response = withImageBrowserCache(answer(200, { 'Cache-Control': immutable }), IMAGE)
+    expect(response.headers.get('Cache-Control')).toBe(immutable)
   })
 
   it('leaves other paths alone', () => {

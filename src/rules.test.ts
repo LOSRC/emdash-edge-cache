@@ -146,6 +146,27 @@ describe('defineCacheConfig', () => {
     ).toThrow(/"\/feed\.xml".*never cached/)
   })
 
+  it('throws for a rule key written with a trailing slash on a fixed path or a site path', () => {
+    expect(() => defineCacheConfig({ routeRules: { '/robots.txt/': DETAIL } })).toThrow(
+      /"\/robots\.txt\/".*no cache tags/,
+    )
+    expect(() =>
+      defineCacheConfig({ routeRules: { '/sitemap-[collection].xml/': DETAIL } }),
+    ).toThrow(/no cache tags/)
+    expect(() =>
+      defineCacheConfig({
+        routeRules: { '/cart/': LISTING },
+        neverCached: { paths: ['/cart'] },
+      }),
+    ).toThrow(/"\/cart\/".*never cached/)
+    expect(() =>
+      defineCacheConfig({
+        routeRules: { '/cart': LISTING },
+        neverCached: { paths: ['/cart/'] },
+      }),
+    ).toThrow(/"\/cart".*never cached/)
+  })
+
   it('throws for a site prefix that does not start with a slash', () => {
     expect(() =>
       defineCacheConfig({ routeRules: DEFAULT_ROUTE_RULES, neverCached: { prefixes: ['api'] } }),
@@ -191,6 +212,51 @@ describe('isNeverCached', () => {
     expect(isNeverCached('/sitemap-products.xml', own)).toBe(false)
     expect(isNeverCached('/sitemap-posts.xml', own)).toBe(true)
     expect(isNeverCached('/sitemap.xml', own)).toBe(true)
+  })
+
+  describe('a trailing slash makes no difference', () => {
+    it('to a site path (Astro serves /cart/ from the /cart page)', () => {
+      const withCart = defineCacheConfig({
+        routeRules: DEFAULT_ROUTE_RULES,
+        neverCached: { paths: ['/cart'] },
+      })
+      expect(isNeverCached('/cart', withCart)).toBe(true)
+      expect(isNeverCached('/cart/', withCart)).toBe(true)
+    })
+
+    it('to a site path written with a slash', () => {
+      const withCart = defineCacheConfig({
+        routeRules: DEFAULT_ROUTE_RULES,
+        neverCached: { paths: ['/cart/'] },
+      })
+      expect(isNeverCached('/cart', withCart)).toBe(true)
+      expect(isNeverCached('/cart/', withCart)).toBe(true)
+    })
+
+    it('to the fixed paths', () => {
+      const bare = defineCacheConfig({ routeRules: DEFAULT_ROUTE_RULES })
+      expect(isNeverCached('/robots.txt/', bare)).toBe(true)
+      expect(isNeverCached('/sitemap.xml/', bare)).toBe(true)
+    })
+
+    it('to a sitemap shard, and to the exemption for a shard the site has a rule for', () => {
+      const bare = defineCacheConfig({ routeRules: DEFAULT_ROUTE_RULES })
+      expect(isNeverCached('/sitemap-x.xml/', bare)).toBe(true)
+      const own = defineCacheConfig({ routeRules: { '/sitemap-products.xml': LISTING } })
+      expect(isNeverCached('/sitemap-products.xml/', own)).toBe(false)
+      const ownSlash = defineCacheConfig({ routeRules: { '/sitemap-products.xml/': LISTING } })
+      expect(isNeverCached('/sitemap-products.xml', ownSlash)).toBe(false)
+      expect(isNeverCached('/sitemap-products.xml/', ownSlash)).toBe(false)
+    })
+
+    it('but only one slash is dropped, and the root stays the root', () => {
+      const withCart = defineCacheConfig({
+        routeRules: DEFAULT_ROUTE_RULES,
+        neverCached: { paths: ['/cart'] },
+      })
+      expect(isNeverCached('/cart//', withCart)).toBe(false)
+      expect(isNeverCached('/', withCart)).toBe(false)
+    })
   })
 
   it('takes a config with no route rules', () => {
