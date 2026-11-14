@@ -230,6 +230,10 @@ redirects, nightly purges of particular tags, `public/_headers` for static files
 - **EmDash's co-editing rooms are untested through the gateway.** Its WebSocket upgrades and
   `EMDASH_ROOMS` binding have not been tried with the gateway and the cached `Site` in front. A
   site that binds them should test that first.
+- **The cache provider is required.** Every exclusion here works through `cache.set(false)`
+  and the adapter's `no-store` default, and both need `cache: { provider: cacheCloudflare() }`. A
+  site without it sends 200s with no edge header at all, never-cached paths included, and
+  Workers Cache then decides by its own rules (the adapter's own comment says up to two hours).
 - Adopting the gateway on a site that already caches changes the cache key (the entrypoint is
   part of it), so expect a cold cache once.
 

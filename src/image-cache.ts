@@ -58,8 +58,8 @@ function isPrivate(response: Response): boolean {
  * visitor would otherwise be served its `private, no-store` and lose the browser day for the hour).
  *
  * A 304 is never kept: EmDash answers a browser's conditional request with one itself, and what
- * Workers Cache does with a body-less 304 on a key it has not stored is not documented. `no-store`
- * costs at most one extra miss.
+ * Workers Cache does with a body-less 304 on a key it has not stored is not documented. The cost
+ * of `no-store` here should be no more than an extra miss, though that is unconfirmed too.
  */
 export function withImageEdgeCache(response: Response, url: URL): Response {
   if (!isImageEndpoint(url)) return response
