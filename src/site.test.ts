@@ -22,10 +22,10 @@ describe('withEdgeRules', () => {
     expect(withEdgeRules(answer(status), IMAGE).headers.get(CDN)).toBe('no-store')
   })
 
-  it('gives a 304 for an image the same hour as a 200', () => {
+  it('never keeps a 304 for an image', () => {
     const response = withEdgeRules(answer(304, { [CDN]: 'no-store' }), IMAGE)
     expect(response.status).toBe(304)
-    expect(response.headers.get(CDN)).toBe(IMAGE_EDGE_CACHE)
+    expect(response.headers.get(CDN)).toBe('no-store')
   })
 
   it('appends stale-if-error to a page the route rule made public', () => {
@@ -50,8 +50,11 @@ describe('withEdgeRules', () => {
     )
   })
 
-  it('leaves a 200 without a CDN header alone', () => {
-    expect(withEdgeRules(answer(200), PAGE).headers.has(CDN)).toBe(false)
+  it('marks a 200 without a CDN header no-store (a site without the cache provider)', () => {
+    const response = withEdgeRules(answer(200, { 'Cache-Control': 'public, max-age=60' }), PAGE)
+    expect(response.headers.get(CDN)).toBe('no-store')
+    // Browsers keep what the site said.
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=60')
   })
 
   it('marks a public 200 without a max-age no-store, so the cache guesses no lifetime', () => {

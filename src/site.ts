@@ -41,7 +41,7 @@ export interface FetchHandler<Env> {
  * only a 200 is ever kept at the edge, and a kept page can be served stale for a week if the
  * Worker fails.
  *
- * - A resized image gets its own edge lifetime (image-cache.ts), a 304 included.
+ * - A resized image gets its own edge lifetime (image-cache.ts): an hour for a 200, nothing else.
  * - A 304 for a page is returned as it is: Workers Cache revalidates a stored entry with a
  *   conditional request, and a 304 tells it to keep what it has.
  * - Any other status than 200 is marked `no-store`: nothing would purge it.
@@ -50,15 +50,20 @@ export interface FetchHandler<Env> {
  * - A 200 whose CDN header has no `max-age` is marked `no-store`. That is a route with no rule
  *   that still called `setPageCache` with hints: the header exists (`public`, tags only), so the
  *   adapter's own `no-store` default does not fire, and Workers Cache may keep such a response by
- *   heuristic. A route with no rule must not be cached. A 200 with no CDN header at all is left
- *   for that default.
+ *   heuristic. A route with no rule must not be cached.
+ * - A 200 with no CDN header at all is marked `no-store`. With the cache provider configured the
+ *   adapter writes one on every rendered route, so this is a site without the provider (or a
+ *   static file the Worker served itself). Its never-cached and private renders would otherwise
+ *   go out with nothing to stop Workers Cache keeping them by its own rules. Failing closed costs
+ *   a misconfigured site its caching, which an after-deploy check sees at once.
  */
 export function withEdgeRules(response: Response, url: URL): Response {
   if (isImageEndpoint(url)) return withImageEdgeCache(response, url)
   if (response.status === 304) return response
   const cdn = response.headers.get(CDN_CACHE_CONTROL)
   if (response.status !== 200) return withCdnCacheControl(response, 'no-store')
-  if (cdn && !cdn.includes('no-store')) {
+  if (!cdn) return withCdnCacheControl(response, 'no-store')
+  if (!cdn.includes('no-store')) {
     if (!cdn.includes('max-age=')) return withCdnCacheControl(response, 'no-store')
     if (cdn.startsWith('public') && !cdn.includes('stale-if-error')) {
       return withCdnCacheControl(response, `${cdn}, stale-if-error=${STALE_IF_ERROR}`)

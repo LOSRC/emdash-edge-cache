@@ -53,18 +53,17 @@ function isPrivate(response: Response): boolean {
 }
 
 /**
- * The response with the edge lifetime for a resized image: an hour for a 200 or a 304, `no-store`
- * for any other status, and for one the middleware marked private: the next anonymous visitor
- * would otherwise be served its `private, no-store` and lose the browser day for the hour. Anything not an image is returned as it is.
+ * The response with the edge lifetime for a resized image: an hour for a 200, and `no-store` for
+ * anything else, a 304 included, and for a 200 the middleware marked private (the next anonymous
+ * visitor would otherwise be served its `private, no-store` and lose the browser day for the hour).
  *
- * A 304 gets the hour too: Workers Cache revalidates its stored image with a conditional request
- * once the hour is up, and per RFC 9111 section 4.3.4 the headers of a 304 update the stored
- * entry. Without this the 304 carries the adapter's `no-store` (the middleware disables the route
- * cache for `/_image`), which would end the stored entry's life.
+ * A 304 is never kept: EmDash answers a browser's conditional request with one itself, and what
+ * Workers Cache does with a body-less 304 on a key it has not stored is not documented. The cost
+ * of `no-store` here should be no more than an extra miss, though that is unconfirmed too.
  */
 export function withImageEdgeCache(response: Response, url: URL): Response {
   if (!isImageEndpoint(url)) return response
-  const kept = (response.status === 200 || response.status === 304) && !isPrivate(response)
+  const kept = response.status === 200 && !isPrivate(response)
   const cached = new Response(response.body, response)
   cached.headers.set('Cloudflare-CDN-Cache-Control', kept ? IMAGE_EDGE_CACHE : 'no-store')
   return cached
