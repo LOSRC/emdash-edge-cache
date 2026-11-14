@@ -51,8 +51,8 @@ export interface FetchHandler<Env> {
  *   that still called `setPageCache` with hints: the header exists (`public`, tags only), so the
  *   adapter's own `no-store` default does not fire, and Workers Cache may keep such a response by
  *   heuristic. A route with no rule must not be cached.
- * - A 200 with no CDN header at all is returned as it is. With the cache provider configured the
- *   adapter has already written `no-store` on such a response, so this does not happen; a site
+ * - A 200 with no CDN header at all is returned as it is. For a rendered route with the cache
+ *   provider configured the adapter has already written `no-store`, so it does not arise; a site
  *   without the provider gets no edge header from anything here (see the README).
  */
 export function withEdgeRules(response: Response, url: URL): Response {
