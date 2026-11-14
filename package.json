@@ -1,10 +1,10 @@
 {
   "name": "@losrc/emdash-edge-cache",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Edge caching for EmDash sites on Cloudflare Workers: an uncached gateway in front of a cached Site entrypoint, tracking-parameter stripping, image lifetimes, private renders and a non-200 guard",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@11.1.1",
+  "packageManager": "pnpm@11.28.4",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LOSRC/emdash-edge-cache.git"
@@ -30,6 +30,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

@@ -13,8 +13,8 @@ What the package does:
 | Concern | Behaviour | Where |
 |---|---|---|
 | Tracking parameters | Strips `utm_*`, `mc_*`, `fbclid` and `gclid` before the cache, so a tagged link shares the plain page's cache entry. Puts them back on a same-origin redirect `Location`, so analytics still sees them after the hop. Only GET and HEAD requests are stripped: they reach the site without the parameters, so server code never sees them, and analytics reads them in the browser. Other methods are not cached and pass through unchanged. | gateway |
-| Pages | Route rules a site extends. Detail pages: a day. Listings: ten minutes. Both get a week of `stale-while-revalidate`, and `Site` adds a week of `stale-if-error`. | `cache-config.ts`, `Site` |
-| Resized images (`/_image`) | Edge: a 200 or a 304 for an hour; an error, or a render the middleware marked private (a signed-in editor's), `no-store`. Browsers: `public, max-age=86400, stale-while-revalidate=604800`. | `Site` (edge), gateway (browser) |
+| Pages | Route rules a site extends. Detail pages: a day. Listings: ten minutes. Both are sent with a week of `stale-while-revalidate`, and `Site` adds a week of `stale-if-error`. Unconfirmed until a deployed site shows `cf-cache-status: UPDATING` after `max-age`: pages also carry the browser header `Cache-Control: public, max-age=0, must-revalidate`, and Workers Cache turns stale serving off under `must-revalidate`, although `Cloudflare-CDN-Cache-Control` should take precedence at the edge. | `cache-config.ts`, `Site` |
+| Resized images (`/_image`) | Edge: a 200 for an hour; anything else (an error, a 304) and a render the middleware marked private (a signed-in editor's) `no-store`. Browsers: `public, max-age=86400, stale-while-revalidate=604800`. | `Site` (edge), gateway (browser) |
 | Only 200s are cached | Any other status is kept out of the edge cache. Redirects, 404s and errors also get `private, no-store`, because nothing would purge them. A 200 whose edge header has no `max-age` (a route with no rule) is not kept either. | middleware, and again in `Site` |
 | Private renders | The admin, `?_preview`, the toolbar's `?_edit` render, the `emdash-edit-mode=true` cookie and signed-in visitors all get `private, no-store`, and stay out of the edge cache. | middleware |
 | Never-cached paths | `/_emdash` and `/_image` (so no page rule can catch them), plus EmDash's untagged `/robots.txt`, `/sitemap.xml` and `/sitemap-*.xml`, plus the site's own. A trailing slash makes no difference, to paths or prefixes (`/cart/` is `/cart`), because Astro serves both from one page while the cache keys them apart. A site that serves its own tagged sitemap shard opts in with a rule for that exact path. | middleware |
@@ -31,14 +31,22 @@ pnpm add github:LOSRC/emdash-edge-cache#<commit>
 
 The package builds its `dist/` in a `prepare` script when pnpm fetches it. pnpm 11 refuses to run
 a git dependency's build (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`) unless it is allowed in
-`pnpm-workspace.yaml`:
+`pnpm-workspace.yaml`. With pnpm 11.28.4, allow it by its repository:
 
 ```yaml
 allowBuilds:
-  '@losrc/emdash-edge-cache': true
+  '@losrc/emdash-edge-cache@git+https://github.com/LOSRC/emdash-edge-cache.git': true
 ```
 
-The package name is enough, and it does not change when you move to a newer commit.
+Tested with pnpm 11.28.4, with an empty store so `prepare` really ran:
+
+| `allowBuilds` key | pnpm 11.28.4 | pnpm 11.1.1 |
+|---|---|---|
+| `'@losrc/emdash-edge-cache@git+https://github.com/LOSRC/emdash-edge-cache.git'` | builds, for any commit | config refused (`ERR_PNPM_INVALID_VERSION_UNION`) |
+| `'@losrc/emdash-edge-cache@https://codeload.github.com/LOSRC/emdash-edge-cache/tar.gz/<full sha>'` | builds, for that commit only | not tried |
+| `'@losrc/emdash-edge-cache'` | refused (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`) | builds |
+
+The repository key does not change when you move to a newer commit. The tarball key has to.
 
 Peer ranges, the versions this release was written against: `emdash` 1.2.0 to 1.5.x, `astro`
 7.3.5 to 7.4.x, `@astrojs/cloudflare` 14.3.3 to 14.4.x. pnpm warns outside them. That is on
@@ -107,14 +115,16 @@ export default defineConfig({
   routeRules: cacheConfig.routeRules,
   integrations: [
     emdash({
-      // ...database, storage, plugins
-      // Pages are the same for everyone; editors get a script and an uncached `?_edit` render.
-      toolbar: 'client',
+      // ...database, storage, plugins, and the site's own `toolbar` choice
       middleware: { outer: './src/outer-middleware.ts' },
     }),
   ],
 })
 ```
+
+`toolbar` is each site's own choice. With `toolbar: 'client'` a page is the same for everyone and
+editors get a script and an uncached `?_edit` render; with EmDash's default, the toolbar is drawn
+for signed-in editors only. The middleware keeps both out of the edge cache.
 
 ### `src/worker.ts`
 
@@ -234,6 +244,17 @@ import { PACKAGE_VERSION } from '@losrc/emdash-edge-cache'
 The header values are exported too (`IMAGE_BROWSER_CACHE`, `IMAGE_EDGE_CACHE`,
 `PUBLIC_CACHE_CONTROL`, `PRIVATE_NO_STORE`), so after-deploy checks compare against the same
 strings.
+
+## Releasing
+
+A site pins a commit; a deploy tool compares `PACKAGE_VERSION` against the version it requires.
+So every change a tool should be able to require bumps the version, in the same pull request:
+
+1. Bump `version` in `package.json` and `PACKAGE_VERSION` in `src/version.ts` (a test holds them
+   together).
+2. Add the change to `CHANGELOG.md`.
+3. After merging, the deploy tool raises its required version to the new one, pinned to the merge
+   commit on `main`.
 
 ## Develop
 

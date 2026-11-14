@@ -22,10 +22,10 @@ describe('withEdgeRules', () => {
     expect(withEdgeRules(answer(status), IMAGE).headers.get(CDN)).toBe('no-store')
   })
 
-  it('gives a 304 for an image the same hour as a 200', () => {
+  it('never keeps a 304 for an image', () => {
     const response = withEdgeRules(answer(304, { [CDN]: 'no-store' }), IMAGE)
     expect(response.status).toBe(304)
-    expect(response.headers.get(CDN)).toBe(IMAGE_EDGE_CACHE)
+    expect(response.headers.get(CDN)).toBe('no-store')
   })
 
   it('appends stale-if-error to a page the route rule made public', () => {

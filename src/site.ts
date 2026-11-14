@@ -41,7 +41,7 @@ export interface FetchHandler<Env> {
  * only a 200 is ever kept at the edge, and a kept page can be served stale for a week if the
  * Worker fails.
  *
- * - A resized image gets its own edge lifetime (image-cache.ts), a 304 included.
+ * - A resized image gets its own edge lifetime (image-cache.ts): an hour for a 200, nothing else.
  * - A 304 for a page is returned as it is: Workers Cache revalidates a stored entry with a
  *   conditional request, and a 304 tells it to keep what it has.
  * - Any other status than 200 is marked `no-store`: nothing would purge it.

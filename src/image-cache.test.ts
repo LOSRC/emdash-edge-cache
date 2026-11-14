@@ -105,10 +105,10 @@ describe('withImageEdgeCache', () => {
     ).toBe(IMAGE_EDGE_CACHE)
   })
 
-  it('gives a 304 the same hour as a 200, so revalidating does not end the stored entry', () => {
+  it('never keeps a 304: only a 200 gets the hour', () => {
     const response = withImageEdgeCache(answer(304), IMAGE)
     expect(response.status).toBe(304)
-    expect(response.headers.get('Cloudflare-CDN-Cache-Control')).toBe(IMAGE_EDGE_CACHE)
+    expect(response.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store')
   })
 
   it('leaves other paths alone', () => {
