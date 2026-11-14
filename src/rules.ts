@@ -32,7 +32,10 @@ export const ALWAYS_NEVER_CACHED_PREFIXES: readonly string[] = ['/_emdash', '/_i
  * EmDash's own single-segment routes that carry no cache tags, so nothing would purge them after
  * an edit, and that the default `/[slug]` rule matches: `/robots.txt` (it answers `no-store` while
  * EmDash's staging setting is on, which must not be kept for a week) and the sitemap index. Its
- * per-collection sitemaps (`/sitemap-<collection>.xml`) are matched by `isSitemapShard`.
+ * per-collection sitemaps (`/sitemap-<collection>.xml`) are matched by `isSitemapShard`, and stay
+ * never-cached unless the site serves a tagged sitemap of its own at that exact path and writes a
+ * rule for it: a static route takes priority over EmDash's dynamic one, so that path is the
+ * site's, not EmDash's.
  */
 export const ALWAYS_NEVER_CACHED_PATHS: readonly string[] = ['/robots.txt', '/sitemap.xml']
 
@@ -41,6 +44,11 @@ const SITEMAP_SHARD = /^\/sitemap-[^/]+\.xml$/
 
 function isSitemapShard(path: string): boolean {
   return SITEMAP_SHARD.test(path)
+}
+
+/** Whether a rule key is a pattern (`[param]` or `*`) rather than one literal path. */
+function isPattern(key: string): boolean {
+  return /[[\]*]/.test(key)
 }
 
 export interface EdgeCacheConfig {
@@ -75,7 +83,7 @@ export function under(pathname: string, prefix: string): boolean {
 function literalLead(pattern: string): string {
   const literal: string[] = []
   for (const segment of pattern.split('/').slice(1)) {
-    if (/[[\]*]/.test(segment)) break
+    if (isPattern(segment)) break
     literal.push(segment)
   }
   return `/${literal.join('/')}`
@@ -94,14 +102,22 @@ export function defineCacheConfig(config: EdgeCacheConfig): NormalisedEdgeCacheC
     }
   }
   const prefixes = [...new Set([...ALWAYS_NEVER_CACHED_PREFIXES, ...sitePrefixes])]
+  const sitePaths = config.neverCached?.paths ?? []
 
   for (const pattern of Object.keys(config.routeRules)) {
     if (!pattern.startsWith('/')) throw new Error(`Route rule "${pattern}" must start with "/"`)
-    if (ALWAYS_NEVER_CACHED_PATHS.includes(pattern) || isSitemapShard(pattern)) {
+    // A literal shard path is the site's own tagged sitemap; only the pattern is EmDash's route.
+    if (
+      ALWAYS_NEVER_CACHED_PATHS.includes(pattern) ||
+      (isSitemapShard(pattern) && isPattern(pattern))
+    ) {
       throw new Error(
         `Route rule "${pattern}" is one of EmDash's built-in routes, which has no cache tags ` +
           'and is never cached',
       )
+    }
+    if (sitePaths.includes(pattern)) {
+      throw new Error(`Route rule "${pattern}" is also in neverCached.paths, which is never cached`)
     }
     const lead = literalLead(pattern)
     if (prefixes.some((prefix) => under(lead, prefix))) {
@@ -114,7 +130,7 @@ export function defineCacheConfig(config: EdgeCacheConfig): NormalisedEdgeCacheC
     neverCached: Object.freeze({
       prefixes: Object.freeze(prefixes),
       paths: Object.freeze([
-        ...new Set([...ALWAYS_NEVER_CACHED_PATHS, ...(config.neverCached?.paths ?? [])]),
+        ...new Set([...ALWAYS_NEVER_CACHED_PATHS, ...sitePaths]),
       ]),
     }),
   })
@@ -122,17 +138,23 @@ export function defineCacheConfig(config: EdgeCacheConfig): NormalisedEdgeCacheC
 
 /**
  * Whether a path is never cached, whatever route rule matched. The fixed prefixes and paths
- * always count, even for a config that was not run through `defineCacheConfig`.
+ * always count, even for a config that was not run through `defineCacheConfig`. A sitemap shard
+ * is never cached unless the config has a rule for that exact path (the site's own tagged sitemap).
  */
 export function isNeverCached(
   pathname: string,
-  config: { neverCached?: { prefixes?: readonly string[]; paths?: readonly string[] } },
+  config: {
+    routeRules?: Readonly<Record<string, RouteRule>>
+    neverCached?: { prefixes?: readonly string[]; paths?: readonly string[] }
+  },
 ): boolean {
   const { prefixes = [], paths = [] } = config.neverCached ?? {}
+  const ownShard = isSitemapShard(pathname) && Object.hasOwn(config.routeRules ?? {}, pathname)
   return (
-    isSitemapShard(pathname) ||
+    (isSitemapShard(pathname) && !ownShard) ||
     ALWAYS_NEVER_CACHED_PATHS.includes(pathname) ||
     paths.includes(pathname) ||
-    [...ALWAYS_NEVER_CACHED_PREFIXES, ...prefixes].some((prefix) => under(pathname, prefix))
+    ALWAYS_NEVER_CACHED_PREFIXES.some((prefix) => under(pathname, prefix)) ||
+    prefixes.some((prefix) => under(pathname, prefix))
   )
 }

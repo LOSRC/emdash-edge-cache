@@ -123,12 +123,27 @@ describe('defineCacheConfig', () => {
   })
 
   it('throws for a rule on one of EmDash’s built-in untagged routes', () => {
-    const keys = ['/robots.txt', '/sitemap.xml', '/sitemap-[collection].xml', '/sitemap-posts.xml']
+    const keys = ['/robots.txt', '/sitemap.xml', '/sitemap-[collection].xml']
     for (const key of keys) {
       expect(() => defineCacheConfig({ routeRules: { [key]: DETAIL } })).toThrow(
         new RegExp(`"${key.replace(/[[\]]/g, '\\$&').replace('.', '\\.')}".*no cache tags`),
       )
     }
+  })
+
+  it('allows a rule on a literal sitemap shard, for a site that serves its own tagged one', () => {
+    expect(() =>
+      defineCacheConfig({ routeRules: { '/sitemap-products.xml': LISTING } }),
+    ).not.toThrow()
+  })
+
+  it('throws for a rule on a path the site itself made never-cached', () => {
+    expect(() =>
+      defineCacheConfig({
+        routeRules: { '/feed.xml': LISTING },
+        neverCached: { paths: ['/feed.xml'] },
+      }),
+    ).toThrow(/"\/feed\.xml".*never cached/)
   })
 
   it('throws for a site prefix that does not start with a slash', () => {
@@ -169,6 +184,17 @@ describe('isNeverCached', () => {
     expect(isNeverCached('/robots.txt', bare)).toBe(true)
     expect(isNeverCached('/sitemap.xml', bare)).toBe(true)
     expect(isNeverCached('/sitemap-posts.xml', bare)).toBe(true)
+  })
+
+  it('is false for a sitemap shard the site has its own rule for', () => {
+    const own = defineCacheConfig({ routeRules: { '/sitemap-products.xml': LISTING } })
+    expect(isNeverCached('/sitemap-products.xml', own)).toBe(false)
+    expect(isNeverCached('/sitemap-posts.xml', own)).toBe(true)
+    expect(isNeverCached('/sitemap.xml', own)).toBe(true)
+  })
+
+  it('takes a config with no route rules', () => {
+    expect(isNeverCached('/sitemap-posts.xml', { neverCached: {} })).toBe(true)
   })
 
   it('is false for a page that only looks like a sitemap', () => {

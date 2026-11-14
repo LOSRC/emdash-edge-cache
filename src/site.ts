@@ -1,6 +1,6 @@
 import { WorkerEntrypoint } from 'cloudflare:workers'
 
-import { withImageEdgeCache } from './image-cache.ts'
+import { isImageEndpoint, withImageEdgeCache } from './image-cache.ts'
 import { STALE_IF_ERROR } from './lifetimes.ts'
 
 /** EmDash's maintenance cron: publishes what is due and purges what changed. */
@@ -41,15 +41,15 @@ export interface FetchHandler<Env> {
  * only a 200 is ever kept at the edge, and a kept page can be served stale for a week if the
  * Worker fails.
  *
- * - A resized image gets its own edge lifetime (image-cache.ts).
- * - A 304 is returned as it is: Workers Cache revalidates a stored entry with a conditional
- *   request, and a 304 tells it to keep what it has.
+ * - A resized image gets its own edge lifetime (image-cache.ts), a 304 included.
+ * - A 304 for a page is returned as it is: Workers Cache revalidates a stored entry with a
+ *   conditional request, and a 304 tells it to keep what it has.
  * - Any other status than 200 is marked `no-store`: nothing would purge it.
  * - A 200 the adapter made public with a `max-age` gets `stale-if-error`, which Astro's route rules
  *   cannot say. One the adapter marked `no-store` is left alone.
  */
 export function withEdgeRules(response: Response, url: URL): Response {
-  if (url.pathname === '/_image') return withImageEdgeCache(response, url)
+  if (isImageEndpoint(url)) return withImageEdgeCache(response, url)
   if (response.status === 304) return response
   const cdn = response.headers.get(CDN_CACHE_CONTROL)
   if (response.status !== 200) return withCdnCacheControl(response, 'no-store')
@@ -97,18 +97,34 @@ export interface RunScheduledOptions<Env> {
  * `ctx.waitUntil` and returns; this collects that work and waits for it, so the gateway's cron
  * invocation lasts until publishing and purging are done, and a failure surfaces. The cron
  * EmDash owns goes to EmDash (as does every cron when the site has no `onCron`); the rest go to
- * the site's `onCron`.
+ * the site's `onCron`. If the handler throws, the work it already handed over is still awaited and
+ * the handler's error is rethrown.
  */
 export async function runScheduled<Env>(options: RunScheduledOptions<Env>): Promise<void> {
   const { cron, scheduledTime, scheduled, onCron, env } = options
   const pending: Promise<unknown>[] = []
   const ctx = collectingCtx(options.ctx, pending)
-  if (cron === EMDASH_CRON || !onCron) {
-    await scheduled({ cron, scheduledTime, noRetry() {} }, env, ctx)
-  } else {
-    await onCron({ cron, scheduledTime }, env, ctx)
+  let failure: { error: unknown } | undefined
+  try {
+    if (cron === EMDASH_CRON || !onCron) {
+      await scheduled({ cron, scheduledTime, noRetry() {} }, env, ctx)
+    } else {
+      await onCron({ cron, scheduledTime }, env, ctx)
+    }
+  } catch (error) {
+    failure = { error }
   }
-  await Promise.all(pending)
+  // Drain in a loop: a task may itself hand more work to waitUntil. Settle everything, even after
+  // the handler failed, so no rejection goes unhandled.
+  const rejections: unknown[] = []
+  while (pending.length > 0) {
+    for (const result of await Promise.allSettled(pending.splice(0))) {
+      if (result.status === 'rejected') rejections.push(result.reason)
+    }
+  }
+  // The handler's own error comes first; otherwise the first rejection.
+  if (failure) throw failure.error
+  if (rejections.length > 0) throw rejections[0]
 }
 
 /** The `Site` entrypoint: what `createSite` builds a class of. */

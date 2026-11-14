@@ -17,7 +17,7 @@ What the package does:
 | Resized images (`/_image`) | Edge: a 200 for an hour, any error `no-store`. Browsers: `public, max-age=86400, stale-while-revalidate=604800`. | `Site` (edge), gateway (browser) |
 | Only 200s are cached | Any other status is kept out of the edge cache. Redirects, 404s and errors also get `private, no-store`, because nothing would purge them. | middleware, and again in `Site` |
 | Private renders | The admin, `?_preview`, the toolbar's `?_edit` render, the `emdash-edit-mode=true` cookie and signed-in visitors all get `private, no-store`, and stay out of the edge cache. | middleware |
-| Never-cached paths | `/_emdash` and `/_image` (so no page rule can catch them), plus EmDash's untagged `/robots.txt`, `/sitemap.xml` and `/sitemap-*.xml`, plus the site's own. | middleware |
+| Never-cached paths | `/_emdash` and `/_image` (so no page rule can catch them), plus EmDash's untagged `/robots.txt`, `/sitemap.xml` and `/sitemap-*.xml`, plus the site's own. A site that serves its own tagged sitemap shard opts in with a rule for that exact path. | middleware |
 | `noindex` | `X-Robots-Tag: noindex, nofollow` on any `*.workers.dev` address, added after the cache so it never reaches a page cached for the real domain. | gateway |
 | Crons | The gateway's `scheduled` calls `Site.runScheduled`, because purges reach only the cache of the entrypoint that makes them. EmDash's sweep runs there and is awaited. | gateway, `Site` |
 
@@ -72,7 +72,7 @@ export default defineCacheConfig({
 })
 ```
 
-`defineCacheConfig` throws if a rule names a never-cached path, for example `/_image`.
+`defineCacheConfig` throws if a rule names a never-cached path, for example `/_image`. A rule for a literal `/sitemap-<name>.xml` is allowed, for a site that serves its own tagged sitemap there.
 
 Route rules are Astro's (`maxAge`, `swr`, `tags`). Write a rule for every public route you want
 cached. A route with no rule is not cached.

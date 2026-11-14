@@ -30,6 +30,35 @@ describe('withoutTrackingParams', () => {
     )
   })
 
+  it('keeps the other parameters exactly as written', () => {
+    expect(strip('/about/?q=a%20b&utm_source=x&tag=c+d&e=%2F')).toBe(
+      '/about/?q=a%20b&tag=c+d&e=%2F',
+    )
+  })
+
+  it('keeps a parameter with no value', () => {
+    expect(strip('/about/?flag&utm_source=x')).toBe('/about/?flag')
+  })
+
+  it('leaves no question mark when every parameter was a tag', () => {
+    expect(withoutTrackingParams(new URL('https://example.com/about/?utm_source=x')).href).toBe(
+      'https://example.com/about/',
+    )
+  })
+
+  it('decides on the decoded name, so an encoded tag next to a plain one is dropped too', () => {
+    expect(strip('/about/?utm_source=x&utm%5Fmedium=y&q=1')).toBe('/about/?q=1')
+  })
+
+  it('keeps a parameter whose name cannot be decoded', () => {
+    expect(strip('/about/?%E0%A4%A=1&utm_source=x')).toBe('/about/?%E0%A4%A=1')
+  })
+
+  it('hands back the same URL when the pattern matched but nothing was a tag', () => {
+    const url = new URL('https://example.com/about/?q=1&my=utm_source%3D1&a=%26utm_x')
+    expect(withoutTrackingParams(url)).toBe(url)
+  })
+
   it('hands back the very same URL when there is nothing to drop', () => {
     const url = new URL('https://example.com/about/?q=pod')
     expect(withoutTrackingParams(url)).toBe(url)

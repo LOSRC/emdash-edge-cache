@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createEdgeCacheMiddleware } from './middleware.ts'
-import { DEFAULT_ROUTE_RULES, defineCacheConfig } from './rules.ts'
+import { DEFAULT_ROUTE_RULES, defineCacheConfig, LISTING } from './rules.ts'
 
 const config = defineCacheConfig({
   routeRules: DEFAULT_ROUTE_RULES,
@@ -153,6 +153,18 @@ describe('never-cached paths', () => {
       expect(events).toEqual(OFF_AROUND_NEXT)
     },
   )
+
+  it('leaves a sitemap shard the site has its own rule for to the route rules', async () => {
+    const own = defineCacheConfig({ routeRules: { '/sitemap-products.xml': LISTING } })
+    const events: string[] = []
+    const context = {
+      url: new URL('https://example.com/sitemap-products.xml'),
+      cookies: { get: () => undefined },
+      cache: { set: () => events.push('cache.set(false)') },
+    }
+    await createEdgeCacheMiddleware(own)(context, async () => page())
+    expect(events).toEqual([])
+  })
 
   it('does not touch a path that only looks like a never-cached prefix', async () => {
     const { events } = await run('https://example.com/apiary', page)

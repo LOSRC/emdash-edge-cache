@@ -22,6 +22,12 @@ describe('withEdgeRules', () => {
     expect(withEdgeRules(answer(status), IMAGE).headers.get(CDN)).toBe('no-store')
   })
 
+  it('gives a 304 for an image the same hour as a 200', () => {
+    const response = withEdgeRules(answer(304, { [CDN]: 'no-store' }), IMAGE)
+    expect(response.status).toBe(304)
+    expect(response.headers.get(CDN)).toBe(IMAGE_EDGE_CACHE)
+  })
+
   it('appends stale-if-error to a page the route rule made public', () => {
     const response = withEdgeRules(answer(200, { [CDN]: ROUTE_RULE }), PAGE)
     expect(response.headers.get(CDN)).toBe(`${ROUTE_RULE}, stale-if-error=${STALE_IF_ERROR}`)
@@ -174,6 +180,95 @@ describe('runScheduled', () => {
       env,
       ctx,
     })
+    expect(finished).toBe(true)
+  })
+
+  it('waits for work that a waitUntil task hands to waitUntil later', async () => {
+    let finished = false
+    const scheduled = (_c: unknown, _e: unknown, c: ExecutionContext) => {
+      c.waitUntil(
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            c.waitUntil(
+              new Promise<void>((done) =>
+                setTimeout(() => {
+                  finished = true
+                  done()
+                }, 10),
+              ),
+            )
+            resolve()
+          }, 10),
+        ),
+      )
+    }
+    await runScheduled({ cron: EMDASH_CRON, scheduledTime: 1, scheduled, env, ctx })
+    expect(finished).toBe(true)
+  })
+
+  it('finishes the work already handed over when the handler throws, then rethrows', async () => {
+    let finished = false
+    const onCron = (_c: unknown, _e: unknown, c: ExecutionContext) => {
+      c.waitUntil(
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            finished = true
+            resolve()
+          }, 10),
+        ),
+      )
+      c.waitUntil(Promise.reject(new Error('task failed')))
+      throw new Error('cron failed')
+    }
+    await expect(
+      runScheduled({
+        cron: '0 3 * * *',
+        scheduledTime: 1,
+        scheduled: vi.fn(),
+        onCron,
+        env,
+        ctx,
+      }),
+    ).rejects.toThrow('cron failed')
+    expect(finished).toBe(true)
+  })
+
+  it('still finishes the work already handed over when the handler rejects', async () => {
+    let finished = false
+    const scheduled = async (_c: unknown, _e: unknown, c: ExecutionContext) => {
+      c.waitUntil(
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            finished = true
+            resolve()
+          }, 10),
+        ),
+      )
+      throw new Error('sweep failed')
+    }
+    await expect(
+      runScheduled({ cron: EMDASH_CRON, scheduledTime: 1, scheduled, env, ctx }),
+    ).rejects.toThrow('sweep failed')
+    expect(finished).toBe(true)
+  })
+
+  it('surfaces the first rejection after every task has settled', async () => {
+    let finished = false
+    const scheduled = (_c: unknown, _e: unknown, c: ExecutionContext) => {
+      c.waitUntil(Promise.reject(new Error('first failed')))
+      c.waitUntil(
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            finished = true
+            resolve()
+          }, 10),
+        ),
+      )
+      c.waitUntil(Promise.reject(new Error('second failed')))
+    }
+    await expect(
+      runScheduled({ cron: EMDASH_CRON, scheduledTime: 1, scheduled, env, ctx }),
+    ).rejects.toThrow('first failed')
     expect(finished).toBe(true)
   })
 

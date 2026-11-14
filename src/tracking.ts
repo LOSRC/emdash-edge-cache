@@ -34,13 +34,29 @@ function isTracking(name: string): boolean {
   )
 }
 
-/** The URL without its tracking parameters; any other parameters keep their order. */
+/** A parameter's name as a page would read it; an undecodable one is returned as written. */
+function parameterName(part: string): string {
+  const equals = part.indexOf('=')
+  const raw = equals === -1 ? part : part.slice(0, equals)
+  try {
+    return decodeURIComponent(raw.replace(/\+/g, ' '))
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * The URL without its tracking parameters. Works on the raw query string, so the parameters that
+ * stay keep their exact encoding and order (re-serialising through `URLSearchParams` would
+ * rewrite them, and with them the cache key).
+ */
 export function withoutTrackingParams(url: URL): URL {
   if (!MAY_HAVE_TAG.test(url.search)) return url
+  const parts = url.search.slice(1).split('&')
+  const kept = parts.filter((part) => !isTracking(parameterName(part)))
+  if (kept.length === parts.length) return url
   const stripped = new URL(url)
-  for (const name of new Set(stripped.searchParams.keys())) {
-    if (isTracking(name)) stripped.searchParams.delete(name)
-  }
+  stripped.search = kept.join('&')
   return stripped
 }
 

@@ -69,10 +69,10 @@ describe('withImageEdgeCache', () => {
     ).toBe(IMAGE_EDGE_CACHE)
   })
 
-  it('leaves a 304 alone', () => {
-    expect(withImageEdgeCache(answer(304), IMAGE).headers.has('Cloudflare-CDN-Cache-Control')).toBe(
-      false,
-    )
+  it('gives a 304 the same hour as a 200, so revalidating does not end the stored entry', () => {
+    const response = withImageEdgeCache(answer(304), IMAGE)
+    expect(response.status).toBe(304)
+    expect(response.headers.get('Cloudflare-CDN-Cache-Control')).toBe(IMAGE_EDGE_CACHE)
   })
 
   it('leaves other paths alone', () => {

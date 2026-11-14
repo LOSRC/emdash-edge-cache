@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 import { defineConfig } from 'vitest/config'
 
 // `cloudflare:workers` exists only inside workerd. Tests run in Node against a stand-in that
@@ -5,7 +7,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   resolve: {
     alias: {
-      'cloudflare:workers': new URL('./test/cloudflare-workers.ts', import.meta.url).pathname,
+      'cloudflare:workers': fileURLToPath(new URL('./test/cloudflare-workers.ts', import.meta.url)),
     },
   },
   test: { include: ['src/**/*.test.ts', 'test/**/*.test.ts'] },

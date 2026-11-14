@@ -43,17 +43,20 @@ export function withImageBrowserCache(response: Response, url: URL): Response {
 }
 
 /**
- * The response with the edge lifetime for a resized image: an hour for a 200, `no-store` for any
- * other status except a 304, which is returned as it is (Workers Cache revalidates a stored entry
- * with a conditional request, and a 304 tells it to keep what it has). Anything not an image is
- * returned as it is.
+ * The response with the edge lifetime for a resized image: an hour for a 200 or a 304, `no-store`
+ * for any other status. Anything not an image is returned as it is.
+ *
+ * A 304 gets the hour too: Workers Cache revalidates its stored image with a conditional request
+ * once the hour is up, and per RFC 9111 section 4.3.4 the headers of a 304 update the stored
+ * entry. Without this the 304 carries the adapter's `no-store` (the middleware disables the route
+ * cache for `/_image`), which would end the stored entry's life.
  */
 export function withImageEdgeCache(response: Response, url: URL): Response {
-  if (!isImageEndpoint(url) || response.status === 304) return response
+  if (!isImageEndpoint(url)) return response
   const cached = new Response(response.body, response)
   cached.headers.set(
     'Cloudflare-CDN-Cache-Control',
-    response.status === 200 ? IMAGE_EDGE_CACHE : 'no-store',
+    response.status === 200 || response.status === 304 ? IMAGE_EDGE_CACHE : 'no-store',
   )
   return cached
 }
