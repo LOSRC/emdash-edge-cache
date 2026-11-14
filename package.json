@@ -1,0 +1,54 @@
+{
+  "name": "@losrc/emdash-edge-cache",
+  "version": "0.1.0",
+  "description": "Edge caching for EmDash sites on Cloudflare Workers: an uncached gateway in front of a cached Site entrypoint, tracking-parameter stripping, image lifetimes, private renders and a non-200 guard",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LOSRC/emdash-edge-cache.git"
+  },
+  "keywords": [
+    "emdash",
+    "astro",
+    "cloudflare",
+    "workers",
+    "cache"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "prepare": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "@astrojs/cloudflare": ">=14.3.3 <14.5.0",
+    "astro": ">=7.3.5 <7.5.0",
+    "emdash": ">=1.2.0 <1.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261001.1",
+    "tsdown": "0.23.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.6",
+    "vitest": "5.0.5"
+  }
+}
