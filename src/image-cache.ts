@@ -39,17 +39,23 @@ export function isImageEndpoint(url: URL): boolean {
 export function withImageBrowserCache(response: Response, url: URL): Response {
   if (!isImageEndpoint(url) || !BROWSER_STATUSES.has(response.status)) return response
   const upstream = response.headers.get('Cache-Control')
+  // Every public image gets the day, even one sent with a year and `immutable` (media served from a
+  // public storage URL can still be replaced in place).
   if (!upstream?.startsWith('public')) return response
-  // A bundled asset served through the endpoint comes with a year and `immutable`; keep it.
-  if (upstream.includes('immutable')) return response
   const cached = new Response(response.body, response)
   cached.headers.set('Cache-Control', IMAGE_BROWSER_CACHE)
   return cached
 }
 
+/** Whether the middleware marked the response private (a signed-in, preview or edit-mode render). */
+function isPrivate(response: Response): boolean {
+  return /\b(?:private|no-store)\b/.test(response.headers.get('Cache-Control') ?? '')
+}
+
 /**
  * The response with the edge lifetime for a resized image: an hour for a 200 or a 304, `no-store`
- * for any other status. Anything not an image is returned as it is.
+ * for any other status, and for one the middleware marked private: the next anonymous visitor
+ * would otherwise be served its `private, no-store` and lose the browser day for the hour. Anything not an image is returned as it is.
  *
  * A 304 gets the hour too: Workers Cache revalidates its stored image with a conditional request
  * once the hour is up, and per RFC 9111 section 4.3.4 the headers of a 304 update the stored
@@ -58,10 +64,8 @@ export function withImageBrowserCache(response: Response, url: URL): Response {
  */
 export function withImageEdgeCache(response: Response, url: URL): Response {
   if (!isImageEndpoint(url)) return response
+  const kept = (response.status === 200 || response.status === 304) && !isPrivate(response)
   const cached = new Response(response.body, response)
-  cached.headers.set(
-    'Cloudflare-CDN-Cache-Control',
-    response.status === 200 || response.status === 304 ? IMAGE_EDGE_CACHE : 'no-store',
-  )
+  cached.headers.set('Cloudflare-CDN-Cache-Control', kept ? IMAGE_EDGE_CACHE : 'no-store')
   return cached
 }

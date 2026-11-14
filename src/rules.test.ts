@@ -174,6 +174,32 @@ describe('defineCacheConfig', () => {
   })
 })
 
+describe('a site prefix written with a trailing slash', () => {
+  const config = defineCacheConfig({
+    routeRules: DEFAULT_ROUTE_RULES,
+    neverCached: { prefixes: ['/account/'] },
+  })
+
+  it.each(['/account', '/account/', '/account/orders'])('still covers %s', (path) => {
+    expect(isNeverCached(path, config)).toBe(true)
+  })
+
+  it('is stored without the slash', () => {
+    expect(config.neverCached.prefixes).toContain('/account')
+    expect(config.neverCached.prefixes).not.toContain('/account/')
+  })
+
+  it('also counts for a config not run through defineCacheConfig', () => {
+    expect(isNeverCached('/account/orders', { neverCached: { prefixes: ['/account/'] } })).toBe(true)
+  })
+
+  it('refuses "/" as a prefix, which would cover the whole site', () => {
+    expect(() =>
+      defineCacheConfig({ routeRules: {}, neverCached: { prefixes: ['/'] } }),
+    ).toThrow(/whole site/)
+  })
+})
+
 describe('isNeverCached', () => {
   const config = defineCacheConfig({
     routeRules: DEFAULT_ROUTE_RULES,

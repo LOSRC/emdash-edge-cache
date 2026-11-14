@@ -96,11 +96,12 @@ function literalLead(pattern: string): string {
  * switch it off, so the rule would be dead weight and the site is surely mistaken about it.
  */
 export function defineCacheConfig(config: EdgeCacheConfig): NormalisedEdgeCacheConfig {
-  const sitePrefixes = config.neverCached?.prefixes ?? []
+  const sitePrefixes = (config.neverCached?.prefixes ?? []).map(bare)
   for (const prefix of sitePrefixes) {
     if (!prefix.startsWith('/')) {
       throw new Error(`Never-cached prefix "${prefix}" must start with "/"`)
     }
+    if (prefix === '/') throw new Error('Never-cached prefix "/" would cover the whole site')
   }
   const prefixes = [...new Set([...ALWAYS_NEVER_CACHED_PREFIXES, ...sitePrefixes])]
   const sitePaths = config.neverCached?.paths ?? []
@@ -159,6 +160,6 @@ export function isNeverCached(
     ALWAYS_NEVER_CACHED_PATHS.includes(path) ||
     paths.some((site) => bare(site) === path) ||
     ALWAYS_NEVER_CACHED_PREFIXES.some((prefix) => under(pathname, prefix)) ||
-    prefixes.some((prefix) => under(pathname, prefix))
+    prefixes.some((prefix) => under(pathname, bare(prefix)))
   )
 }

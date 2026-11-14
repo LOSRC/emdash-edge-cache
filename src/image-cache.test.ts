@@ -62,10 +62,10 @@ describe('withImageBrowserCache', () => {
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
   })
 
-  it('keeps an upstream immutable lifetime (a bundled asset served through the endpoint)', () => {
+  it('gives a day even to an upstream immutable lifetime (media from a public storage URL)', () => {
     const immutable = 'public, max-age=31536000, immutable'
     const response = withImageBrowserCache(answer(200, { 'Cache-Control': immutable }), IMAGE)
-    expect(response.headers.get('Cache-Control')).toBe(immutable)
+    expect(response.headers.get('Cache-Control')).toBe(IMAGE_BROWSER_CACHE)
   })
 
   it('leaves other paths alone', () => {
@@ -75,6 +75,14 @@ describe('withImageBrowserCache', () => {
 })
 
 describe('withImageEdgeCache', () => {
+  it.each(['private, no-store', 'no-store', 'private'])(
+    'never keeps a 200 the middleware marked %s (a signed-in or preview render)',
+    (cacheControl) => {
+      const response = withImageEdgeCache(answer(200, { 'Cache-Control': cacheControl }), IMAGE)
+      expect(response.headers.get('Cloudflare-CDN-Cache-Control')).toBe('no-store')
+    },
+  )
+
   it('keeps a 200 at the edge for an hour', () => {
     const response = withImageEdgeCache(answer(200), IMAGE)
     expect(response.headers.get('Cloudflare-CDN-Cache-Control')).toBe(IMAGE_EDGE_CACHE)
