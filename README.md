@@ -38,9 +38,7 @@ allowBuilds:
   '@losrc/emdash-edge-cache': true
 ```
 
-The package name is enough. A key pinned to one tarball
-(`'@losrc/emdash-edge-cache@https://codeload.github.com/LOSRC/emdash-edge-cache/tar.gz/<full sha>': true`)
-also works, but has to change with every upgrade.
+The package name is enough, and it does not change when you move to a newer commit.
 
 Peer ranges, the versions this release was written against: `emdash` 1.2.0 to 1.5.x, `astro`
 7.3.5 to 7.4.x, `@astrojs/cloudflare` 14.3.3 to 14.4.x. pnpm warns outside them. That is on
@@ -72,7 +70,8 @@ export default defineCacheConfig({
 })
 ```
 
-`defineCacheConfig` throws if a rule names a never-cached path, for example `/_image`. A rule for a literal `/sitemap-<name>.xml` is allowed, for a site that serves its own tagged sitemap there.
+`defineCacheConfig` throws if a rule names a never-cached path, for example `/_image`. A rule for a
+literal `/sitemap-<name>.xml` is allowed, for a site that serves its own tagged sitemap there.
 
 Route rules are Astro's (`maxAge`, `swr`, `tags`). Write a rule for every public route you want
 cached. A route with no rule is not cached.
@@ -133,8 +132,8 @@ export default createGateway<Env>(handler)
 ```
 
 Keep `export class Site` as a class declaration in `src/worker.ts`. `ctx.exports.Site` is found by
-that export name. Whether a class assigned to a `const` (`export const Site = createSite(...)`)
-is also found is unconfirmed, so don't rely on it.
+that export name. A class assigned to a `const` (`export const Site = createSite(...)`) was also
+found in local `wrangler dev`, but not yet on a deployed Worker, so don't rely on it.
 
 A site with crons of its own (a nightly purge, say) passes `onCron`. It runs inside `Site`, so its
 purges reach the cache:
